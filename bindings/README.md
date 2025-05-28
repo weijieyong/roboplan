@@ -22,3 +22,9 @@ At this point, you should be able to use `roboplan` as a Python package!
 python3
 >>> import roboplan
 ```
+
+... or run one of the examples.
+
+```bash
+python3 examples/test_scene.py 
+```

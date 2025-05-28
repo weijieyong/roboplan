@@ -13,13 +13,14 @@ find_package(pinocchio REQUIRED)
 # Add libraries
 add_library (roboplan SHARED
     src/scene.cpp
-    src/utils.cpp
+    src/types.cpp
 )
 target_include_directories(roboplan PRIVATE include)
 target_link_libraries(roboplan
     Eigen3::Eigen
     pinocchio::pinocchio
 )
+set_property(TARGET roboplan PROPERTY CXX_STANDARD 20)
 
 install(
   TARGETS
@@ -33,9 +34,9 @@ install(
 install(DIRECTORY include/ DESTINATION include)
 
 # Build and install the executable.
-add_executable(test_pinocchio src/test_pinocchio.cpp)
-target_include_directories(test_pinocchio PRIVATE include)
-target_link_libraries(test_pinocchio
+add_executable(test_scene examples/test_scene.cpp)
+target_include_directories(test_scene PRIVATE include)
+target_link_libraries(test_scene
     Eigen3::Eigen
     pinocchio::pinocchio
     roboplan
@@ -43,7 +44,7 @@ target_link_libraries(test_pinocchio
 
 install(
   TARGETS
-  test_pinocchio
+  test_scene
   DESTINATION lib/roboplan
 )
 
@@ -81,7 +82,7 @@ install(
 # Install the headers and targets
 install(FILES 
             include/roboplan/scene.hpp
-            include/roboplan/utils.hpp
+            include/roboplan/types.hpp
         DESTINATION lib/cmake/roboplan)
 
 install(EXPORT roboplan-targets

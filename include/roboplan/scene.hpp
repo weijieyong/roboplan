@@ -1,9 +1,13 @@
 #pragma once
 
+#include <filesystem>
 #include <iostream>
+#include <optional>
 #include <string>
 
-#include <Eigen/Dense>
+#include <pinocchio/algorithm/geometry.hpp>
+
+#include <roboplan/types.hpp>
 
 namespace roboplan
 {
@@ -12,13 +16,17 @@ namespace roboplan
     {
     public:
         /// @brief Basic constructor
-        Scene(const int ndof);
+        /// @param urdf_path Path to the URDF file.
+        /// @param srdf_path Path to the SRDF file.
+        Scene(const std::filesystem::path &urdf_path, const std::filesystem::path &srdf_path);
 
         /// @brief Prints basic information
         void print();
 
     private:
-        Eigen::VectorXd q_;
+        pinocchio::Model model_;
+
+        JointConfiguration cur_state_;
     };
 
 } // namespace roboplan

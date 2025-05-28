@@ -1,1 +1,2 @@
-from .roboplan import add, createPinocchioModel, Scene, __doc__
+from .roboplan import Scene, __doc__
+from .roboplan.types import JointConfiguration
