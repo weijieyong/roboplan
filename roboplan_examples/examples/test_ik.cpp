@@ -1,23 +1,20 @@
 #include <filesystem>
 #include <vector>
 
+#include <examples/example_resources.hpp>
 #include <roboplan/core/scene.hpp>
 #include <roboplan_simple_ik/simple_ik.hpp>
 
 using namespace roboplan;
 
 int main(int /*argc*/, char* /*argv*/[]) {
+
+  const auto share_prefix = roboplan_examples::get_package_share_dir();
+
   // Set up the scene
-  const std::filesystem::path urdf_path{
-      "/home/sebastian/workspace/roboplan_ws/src/roboplan/"
-      "roboplan_examples/ur_robot_model/ur5_gripper.urdf"};
-
-  const std::filesystem::path srdf_path{
-      "/home/sebastian/workspace/roboplan_ws/src/roboplan/"
-      "roboplan_examples/ur_robot_model/ur5_gripper.srdf"};
-
-  const std::vector<std::filesystem::path> package_paths{
-      "/home/sebastian/workspace/roboplan_ws/src/roboplan/"};
+  const auto urdf_path = share_prefix / "ur_robot_model" / "ur5_gripper.urdf";
+  const auto srdf_path = share_prefix / "ur_robot_model" / "ur5_gripper.srdf";
+  const std::vector<std::filesystem::path> package_paths = {share_prefix};
 
   auto scene = Scene("test_ik_scene", urdf_path, srdf_path, package_paths);
 
