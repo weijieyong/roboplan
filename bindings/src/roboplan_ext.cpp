@@ -1,6 +1,8 @@
 #include <iostream>
 #include <memory>
 
+#include <tl/expected.hpp>
+
 #include <nanobind/eigen/dense.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/filesystem.h>
@@ -21,6 +23,41 @@
 namespace roboplan {
 
 using namespace nanobind::literals;
+
+/// @brief Helper function for checking if a tl::expected return type has a value or an error.
+/// @details If a value exists, we return it as is. When handling unexpected values, if
+/// the error is string convertible then we can pass it along through a `std::runtime_error`.
+/// Otherwise we do not know the details of the underlying exception.
+/// @return The unwrapped value, or throw an exception.
+/// @throw std::runtime_error if the result is an error.
+template <typename Expected> typename Expected::value_type handle_expected(Expected&& result) {
+  if (result.has_value()) {
+    return result.value();
+  } else {
+    // TODO: Consider wrapping with a streamable option.
+    if constexpr (std::is_convertible_v<typename Expected::error_type, std::string>) {
+      throw std::runtime_error(std::string(result.error()));
+    } else {
+      throw std::runtime_error("Unknown error occurred.");
+    }
+  }
+};
+
+/// @brief Wrapper function binding tl::expected return types in class functions with nanobind.
+/// @return The unwrapped value, or throw a runtime_error.
+template <typename Class, typename Ret, typename Err, typename... Args>
+auto unwrap_expected(tl::expected<Ret, Err> (Class::*method)(Args...)) {
+  return [method](Class& self, Args... args) -> Ret {
+    return handle_expected((self.*method)(args...));
+  };
+}
+
+/// @brief Wrapper function binding tl::expected return types in free functions with nanobind.
+/// @return The unwrapped value, or throw a runtime_error.
+template <typename Ret, typename Err, typename... Args>
+auto unwrap_expected(tl::expected<Ret, Err> (*method)(Args...)) {
+  return [method](Args... args) -> Ret { return handle_expected((*method)(args...)); };
+}
 
 NB_MODULE(roboplan, m) {
 
@@ -98,8 +135,8 @@ NB_MODULE(roboplan, m) {
   m_core.def("hasCollisionsAlongPath", &hasCollisionsAlongPath);
   m_core.def("shortcutPath", &shortcutPath, "scene"_a, "path"_a, "max_step_size"_a,
              "max_iters"_a = 100, "seed"_a = 0);
-  m_core.def("getPathLengths", &getPathLengths);
-  m_core.def("getNormalizedPathScaling", &getNormalizedPathScaling);
+  m_core.def("getPathLengths", unwrap_expected(&getPathLengths));
+  m_core.def("getNormalizedPathScaling", unwrap_expected(&getNormalizedPathScaling));
   m_core.def("getConfigurationFromNormalizedPathScaling",
              &getConfigurationFromNormalizedPathScaling);
 
@@ -142,7 +179,7 @@ NB_MODULE(roboplan, m) {
 
   nanobind::class_<RRT>(m_rrt, "RRT")
       .def(nanobind::init<const std::shared_ptr<Scene>, const RRTOptions&>())
-      .def("plan", &RRT::plan)
+      .def("plan", unwrap_expected(&RRT::plan))
       .def("setRngSeed", &RRT::setRngSeed)
       .def("getNodes", &RRT::getNodes);
 }

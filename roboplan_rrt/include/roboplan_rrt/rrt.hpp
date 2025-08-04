@@ -9,6 +9,7 @@
 #include <roboplan/core/scene.hpp>
 #include <roboplan/core/types.hpp>
 #include <roboplan_rrt/graph.hpp>
+#include <tl/expected.hpp>
 
 namespace roboplan {
 
@@ -47,8 +48,9 @@ public:
   /// @brief Plan a path from start to goal.
   /// @param start The starting joint configuration.
   /// @param goal The goal joint configuration.
-  /// @return A joint-space path, if planning succeeds, else std::nullopt.
-  std::optional<JointPath> plan(const JointConfiguration& start, const JointConfiguration& goal);
+  /// @return A joint-space path, if planning succeeds, otherwise an error message.
+  tl::expected<JointPath, std::string> plan(const JointConfiguration& start,
+                                            const JointConfiguration& goal);
 
   /// @brief Sets the seed for the random number generator (RNG).
   /// @details For reproducibility, this also seeds the underlying scene.

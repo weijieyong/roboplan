@@ -44,6 +44,7 @@ nanobind_add_module(
 )
 set_property(TARGET roboplan PROPERTY CXX_STANDARD 20)
 target_link_libraries(roboplan PRIVATE
+  roboplan::expected
   roboplan::roboplan
   roboplan_example_models::roboplan_example_models
   roboplan_rrt::roboplan_rrt
