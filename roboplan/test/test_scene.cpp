@@ -100,4 +100,15 @@ TEST_F(RoboPlanSceneTest, CollisionCheckAlongPath) {
   EXPECT_TRUE(hasCollisionsAlongPath(*scene_, q_start_free, q_end_coll, 0.05));
 }
 
+TEST_F(RoboPlanSceneTest, GetFrameMapReturnsCorrectMapping) {
+  const auto model = scene_->getModel();
+
+  // Verify the frame IDs are correct
+  for (const auto& frame : model.frames) {
+    if (frame.name == "universe")
+      continue;
+    EXPECT_EQ(scene_->getFrameId(frame.name), model.getFrameId(frame.name));
+  }
+}
+
 }  // namespace roboplan
