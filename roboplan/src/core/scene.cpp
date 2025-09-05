@@ -26,8 +26,24 @@ const std::map<std::string, roboplan::JointType> kPinocchioJointTypeMap = {
 
 namespace roboplan {
 
+std::string readFile(const std::filesystem::path& path) {
+  if (!std::filesystem::exists(path)) {
+    throw std::runtime_error("File not found: " + path.string());
+  }
+  auto size = std::filesystem::file_size(path);
+  std::string content(size, '\0');
+  std::ifstream in(path, std::ios::binary);
+  in.read(&content[0], size);
+  return content;
+}
+
 Scene::Scene(const std::string& name, const std::filesystem::path& urdf_path,
              const std::filesystem::path& srdf_path,
+             const std::vector<std::filesystem::path>& package_paths,
+             const std::filesystem::path& yaml_config_path)
+    : Scene(name, readFile(urdf_path), readFile(srdf_path), package_paths, yaml_config_path) {}
+
+Scene::Scene(const std::string& name, const std::string& urdf, const std::string& srdf,
              const std::vector<std::filesystem::path>& package_paths,
              const std::filesystem::path& yaml_config_path)
     : name_{name} {
@@ -39,13 +55,13 @@ Scene::Scene(const std::string& name, const std::filesystem::path& urdf_path,
     package_paths_str.push_back(std::string(path));
   }
 
-  // Build the Pinocchio models and default data.
-  pinocchio::urdf::buildModel(urdf_path, model_);
+  // Build the Pinocchio models and default data from XML strings.
+  pinocchio::urdf::buildModelFromXML(urdf, model_);
 
-  pinocchio::urdf::buildGeom(model_, urdf_path, pinocchio::COLLISION, collision_model_,
-                             package_paths_str);
+  pinocchio::urdf::buildGeom(model_, std::istringstream(urdf), pinocchio::COLLISION,
+                             collision_model_, package_paths_str);
   collision_model_.addAllCollisionPairs();
-  pinocchio::srdf::removeCollisionPairs(model_, collision_model_, srdf_path);
+  pinocchio::srdf::removeCollisionPairsFromXML(model_, collision_model_, srdf);
 
   model_data_ = pinocchio::Data(model_);
   collision_model_data_ = pinocchio::GeometryData(collision_model_);

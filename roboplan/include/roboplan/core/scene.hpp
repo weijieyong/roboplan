@@ -19,6 +19,11 @@
 #include <roboplan/core/types.hpp>
 
 namespace roboplan {
+
+/// @brief Returns the contents of a file as a string.
+/// @param name path The path to the file.
+std::string readFile(const std::filesystem::path& path);
+
 /// @brief Primary scene representation for planning and control.
 class Scene {
 public:
@@ -30,6 +35,17 @@ public:
   /// @param yaml_config_path Path to the YAML configuration file with additional information.
   Scene(const std::string& name, const std::filesystem::path& urdf_path,
         const std::filesystem::path& srdf_path,
+        const std::vector<std::filesystem::path>& package_paths =
+            std::vector<std::filesystem::path>(),
+        const std::filesystem::path& yaml_config_path = std::filesystem::path());
+
+  /// @brief Basic constructor with pre-parsed URDF and SRDF options.
+  /// @param name The name of the scene.
+  /// @param urdf XML String of the URDF.
+  /// @param srdf XML String of the SRDF.
+  /// @param package_paths A vector of package paths to look for packages.
+  /// @param yaml_config_path Path to the YAML configuration file with additional information.
+  Scene(const std::string& name, const std::string& urdf, const std::string& srdf,
         const std::vector<std::filesystem::path>& package_paths =
             std::vector<std::filesystem::path>(),
         const std::filesystem::path& yaml_config_path = std::filesystem::path());

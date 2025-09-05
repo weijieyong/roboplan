@@ -1,6 +1,7 @@
 import sys
 import time
 import tyro
+import xacro
 
 import matplotlib.pyplot as plt
 import pinocchio as pin
@@ -50,15 +51,30 @@ def main(
         print(f"Invalid model requested: {model}")
         sys.exit(1)
 
-    urdf_path, srdf_path, yaml_config_path, ee_name, _, _ = MODELS[model]
+    model_data = MODELS[model]
     package_paths = [ROBOPLAN_EXAMPLES_DIR]
 
-    scene = Scene("test_scene", urdf_path, srdf_path, package_paths, yaml_config_path)
+    # Pre-process with xacro. This is not necessary for raw URDFs.
+    urdf_xml = xacro.process_file(model_data.urdf_path).toxml()
+    srdf_xml = xacro.process_file(model_data.srdf_path).toxml()
+
+    # Specify argument names to distinguish overloaded Scene constructors from python.
+    scene = Scene(
+        "test_scene",
+        urdf=urdf_xml,
+        srdf=srdf_xml,
+        package_paths=package_paths,
+        yaml_config_path=model_data.yaml_config_path,
+    )
 
     # Create a redundant Pinocchio model just for visualization.
     # When Pinocchio 4.x releases nanobind bindings, we should be able to directly grab the model from the scene instead.
-    model, collision_model, visual_model = pin.buildModelsFromUrdf(
-        urdf_path, package_dirs=package_paths
+    model = pin.buildModelFromXML(urdf_xml)
+    collision_model = pin.buildGeomFromUrdfString(
+        model, urdf_xml, pin.GeometryType.COLLISION, package_dirs=package_paths
+    )
+    visual_model = pin.buildGeomFromUrdfString(
+        model, urdf_xml, pin.GeometryType.VISUAL, package_dirs=package_paths
     )
     viz = ViserVisualizer(model, collision_model, visual_model)
     viz.initViewer(open=True, loadModel=True, host=host, port=port)
@@ -93,14 +109,20 @@ def main(
     # Visualize the tree and path
     print(path)
     viz.display(start.positions)
-    visualizePath(viz, scene, path, ee_name, 0.05)
-    visualizeTree(viz, scene, rrt, ee_name, 0.05)
+    visualizePath(viz, scene, path, model_data.ee_names, 0.05)
+    visualizeTree(viz, scene, rrt, model_data.ee_names, 0.05)
 
     if include_shortcutting:
         print("Shortcutted path:")
         print(shortcut_path)
         visualizePath(
-            viz, scene, shortcut_path, ee_name, 0.05, (0, 100, 0), "/rrt/shortcut_path"
+            viz,
+            scene,
+            shortcut_path,
+            model_data.ee_names,
+            0.05,
+            (0, 100, 0),
+            "/rrt/shortcut_path",
         )
         path = shortcut_path
 

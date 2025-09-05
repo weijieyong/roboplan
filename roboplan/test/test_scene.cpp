@@ -20,17 +20,21 @@ class RoboPlanSceneTest : public ::testing::Test {
 protected:
   void SetUp() override {
     const auto share_prefix = example_models::get_package_share_dir();
-    const auto urdf_path = share_prefix / "ur_robot_model" / "ur5_gripper.urdf";
-    const auto srdf_path = share_prefix / "ur_robot_model" / "ur5_gripper.srdf";
-    const std::vector<std::filesystem::path> package_paths = {share_prefix};
-    const auto yaml_config_path = share_prefix / "ur_robot_model" / "ur5_config.yaml";
-    scene_ = std::make_unique<Scene>("test_scene", urdf_path, srdf_path, package_paths,
-                                     yaml_config_path);
+    urdf_path_ = share_prefix / "ur_robot_model" / "ur5_gripper.urdf";
+    srdf_path_ = share_prefix / "ur_robot_model" / "ur5_gripper.srdf";
+    package_paths_ = {share_prefix};
+    yaml_config_path_ = share_prefix / "ur_robot_model" / "ur5_config.yaml";
+    scene_ = std::make_unique<Scene>("test_scene", urdf_path_, srdf_path_, package_paths_,
+                                     yaml_config_path_);
   }
 
 public:
   // No default constructor, so must be a pointer.
   std::unique_ptr<Scene> scene_;
+  std::filesystem::path urdf_path_;
+  std::filesystem::path srdf_path_;
+  std::vector<std::filesystem::path> package_paths_;
+  std::filesystem::path yaml_config_path_;
 };
 
 TEST_F(RoboPlanSceneTest, SceneProperties) {
@@ -123,6 +127,21 @@ TEST_F(RoboPlanSceneTest, TestForwardKinematics) {
       0.0, 1.0;
 
   EXPECT_TRUE(fk.isApprox(expected, 1e-6));
+}
+
+TEST_F(RoboPlanSceneTest, TestLoadXMLStrings) {
+  // Load the sample XMLs from file as strings.
+  auto urdf_xml = readFile(urdf_path_);
+  auto srdf_xml = readFile(srdf_path_);
+
+  // Just make sure it is the same as when loading from file (the validation is above)
+  auto scene_xml =
+      std::make_unique<Scene>("test_scene", urdf_xml, srdf_xml, package_paths_, yaml_config_path_);
+  EXPECT_EQ(scene_xml->getModel().nq, scene_->getModel().nq);
+  EXPECT_THAT(scene_xml->getJointNames(), scene_->getJointNames());
+
+  const auto seeded_positions = scene_xml->randomPositions();
+  EXPECT_EQ(seeded_positions.size(), 6);
 }
 
 }  // namespace roboplan

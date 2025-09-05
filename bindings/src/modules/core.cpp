@@ -87,6 +87,14 @@ void init_core_scene(nanobind::module_& m) {
            "name"_a, "urdf_path"_a, "srdf_path"_a,
            "package_paths"_a = std::vector<std::filesystem::path>(),
            "yaml_config_path"_a = std::filesystem::path())
+      // There's an ambiguity issue due to file paths vs strings in python. So to use this
+      // constructor you MUST specify argument names to clarify to the bindings that you are passing
+      // pre-processed string, and not filepaths.
+      .def(
+          nanobind::init<const std::string&, const std::string&, const std::string&,
+                         const std::vector<std::filesystem::path>&, const std::filesystem::path&>(),
+          "name"_a, "urdf"_a, "srdf"_a, "package_paths"_a = std::vector<std::filesystem::path>(),
+          "yaml_config_path"_a = std::filesystem::path())
       .def("getName", &Scene::getName)
       .def("getJointNames", &Scene::getJointNames)
       .def("getJointInfo", &Scene::getJointInfo)
