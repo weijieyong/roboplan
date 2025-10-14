@@ -24,12 +24,13 @@ def main(
     collision_check_step_size: float = 0.05,
     goal_biasing_probability: float = 0.15,
     max_nodes: int = 1000,
-    max_planning_time: float = 3.0,
+    max_planning_time: float = 5.0,
     rrt_connect: bool = False,
     include_shortcutting: bool = False,
     host: str = "localhost",
     port: str = "8000",
     rng_seed: int | None = None,
+    include_obstacles: bool = False,
 ):
     """
     Run the RRT example with the provided parameters.
@@ -47,6 +48,7 @@ def main(
         host: The host for the ViserVisualizer.
         port: The port for the ViserVisualizer.
         rng_seed: The seed for selecting random start and end poses and solving RRT.
+        include_obstacles: Whether or not to include additional obstacles in the scene.
     """
 
     if model not in MODELS:
@@ -79,6 +81,15 @@ def main(
     visual_model = pin.buildGeomFromUrdfString(
         model, urdf_xml, pin.GeometryType.VISUAL, package_dirs=package_paths
     )
+
+    # Optionally add obstacles.
+    # Again, until Pinocchio 4.x releases nanobind bindings, we need to add the obstacles separately
+    # to the scene and to the Pinocchio models used for visualization.
+    if include_obstacles:
+        for obstacle in model_data.obstacles:
+            obstacle.addToScene(scene)
+            obstacle.addToPinocchioModels(model, collision_model, visual_model)
+
     viz = ViserVisualizer(model, collision_model, visual_model)
     viz.initViewer(open=True, loadModel=True, host=host, port=port)
 

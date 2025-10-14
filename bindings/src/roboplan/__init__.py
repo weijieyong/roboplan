@@ -3,6 +3,7 @@ from .roboplan_ext.core import (
     hasCollisionsAlongPath,
     collapseContinuousJointPositions,
     expandContinuousJointPositions,
+    Box,
     CartesianConfiguration,
     JointConfiguration,
     JointInfo,
@@ -12,6 +13,7 @@ from .roboplan_ext.core import (
     JointType,
     PathShortcutter,
     Scene,
+    Sphere,
     __doc__,
 )
 from .roboplan_ext.example_models import get_install_prefix, get_package_share_dir
