@@ -139,7 +139,10 @@ struct JointPath {
   /// @brief The list of joint configuration positions.
   std::vector<Eigen::VectorXd> positions;
 
-  // TODO: Add higher-order terms as needed.
+  /// @brief The list of joint configuration velocities (optional).
+  /// @details If empty, velocities will be estimated by the path parameterizer.
+  /// If provided, must have the same size as positions.
+  std::vector<Eigen::VectorXd> velocities;
 
   /// @brief Prints basic information about the path.
   friend std::ostream& operator<<(std::ostream& os, const JointPath& path);

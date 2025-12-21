@@ -83,6 +83,7 @@ void init_core_types(nanobind::module_& m) {
       .def(nanobind::init<>())  // Default constructor
       .def_rw("joint_names", &JointPath::joint_names)
       .def_rw("positions", &JointPath::positions)
+      .def_rw("velocities", &JointPath::velocities)
       .def("__repr__", [](const JointPath& path) {
         std::stringstream ss;
         ss << path;

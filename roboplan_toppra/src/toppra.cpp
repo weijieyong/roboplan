@@ -101,13 +101,18 @@ PathParameterizerTOPPRA::generate(const JointPath& path, const double dt,
   acc_constraint->discretizationType(toppra::DiscretizationType::Interpolation);
   toppra::LinearConstraintPtrs constraints = {vel_constraint, acc_constraint};
 
-  // Create initial cubic spline with path and random times.
+  // Create initial cubic spline with path and velocities.
+  // If velocities are not provided, estimate them using finite differences.
   toppra::Vectors path_pos_vecs, path_vel_vecs;
   path_pos_vecs.reserve(num_pts);
   path_vel_vecs.reserve(num_pts);
   std::vector<double> steps;
   steps.reserve(num_pts);
   double s = 0.0;
+
+  // First pass: collect all collapsed positions
+  std::vector<Eigen::VectorXd> collapsed_positions;
+  collapsed_positions.reserve(num_pts);
   for (size_t idx = 0; idx < path.positions.size(); ++idx) {
     const auto& pos = path.positions.at(idx);
     auto maybe_collapsed_pos = collapseContinuousJointPositions(*scene_, group_name_, pos);
@@ -118,10 +123,8 @@ PathParameterizerTOPPRA::generate(const JointPath& path, const double dt,
     auto curr_collapsed = maybe_collapsed_pos.value();
 
     // For continuous joints we have to ensure that we take "the short way around" in the spline.
-    // If the distance to the preview point is greater than PI, then we either add or subtract
-    // 2*PI to this point to ensure that we don't travel further than we need to.
     if (idx > 0) {
-      const auto& prev_collapsed = path_pos_vecs.at(idx - 1);
+      const auto& prev_collapsed = collapsed_positions.at(idx - 1);
       for (auto j_idx : continuous_joint_indices_) {
         const auto diff = curr_collapsed(j_idx) - prev_collapsed(j_idx);
         if (diff > M_PI) {
@@ -131,9 +134,35 @@ PathParameterizerTOPPRA::generate(const JointPath& path, const double dt,
         }
       }
     }
+    collapsed_positions.push_back(curr_collapsed);
+  }
 
-    path_pos_vecs.push_back(curr_collapsed);
-    path_vel_vecs.push_back(Eigen::VectorXd::Zero(curr_collapsed.size()));
+  // Check if velocities are provided and valid
+  const bool velocities_provided =
+      !path.velocities.empty() && path.velocities.size() == num_pts;
+
+  // Second pass: build position and velocity vectors
+  for (size_t idx = 0; idx < num_pts; ++idx) {
+    path_pos_vecs.push_back(collapsed_positions.at(idx));
+
+    Eigen::VectorXd vel;
+    if (velocities_provided) {
+      // Use provided velocities
+      vel = path.velocities.at(idx);
+    } else {
+      // Estimate velocities using finite differences
+      const auto num_dofs = collapsed_positions.at(idx).size();
+      if (idx == 0 || idx == num_pts - 1) {
+        // Endpoints: zero velocity
+        vel = Eigen::VectorXd::Zero(num_dofs);
+      } else {
+        // Interior points: central difference
+        const auto& prev = collapsed_positions.at(idx - 1);
+        const auto& next = collapsed_positions.at(idx + 1);
+        vel = (next - prev) / 2.0;
+      }
+    }
+    path_vel_vecs.push_back(vel);
     steps.push_back(s);
     s += 1.0;
   }

@@ -125,8 +125,16 @@ def main(
     assert goal.positions is not None
 
     print("Planning...")
-    path = rrt.plan(start, goal)
-    assert path is not None
+    try:
+        path = rrt.plan(start, goal)
+    except RuntimeError as e:
+        print(f"Planning failed: {e}")
+        sys.exit(1)
+    
+    if path is None:
+        print("Failed to find a path!")
+        sys.exit(1)
+        
     print(f"Found a path:\n{path}")
 
     # Optionally include path shortening
@@ -140,6 +148,14 @@ def main(
         )
         print(f"Shortcutted path:\n{shortened_path}")
 
+    # Example: explicit velocity setting
+    # You can manually set the velocities at each waypoint if desired.
+    # If path.velocities is empty, TOPPRA will estimate them.
+    # import numpy as np
+    # dof = len(path.joint_names)
+    # # Example: Set all velocities to zero (stop at every waypoint)
+    # path.velocities = [np.zeros(dof) for _ in range(len(path.positions))]
+    
     # Set up TOPP-RA to time-parameterize the path
     print("Generating trajectory...")
     dt = 0.01
