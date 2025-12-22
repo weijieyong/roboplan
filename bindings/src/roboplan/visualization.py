@@ -139,10 +139,6 @@ def visualizeJointTrajectory(
         The matplotlib figure object. Use plt.show() to display it.
     """
     plt.ion()
-    plt.plot(trajectory.times, trajectory.positions)
-    plt.xlabel("Time")
-    plt.ylabel("Joint positions")
-    plt.title(plot_title)
 
     dof_names = []
     for name in trajectory.joint_names:
@@ -152,6 +148,28 @@ def visualizeJointTrajectory(
         else:
             dof_names.extend(f"{name}:{idx}" for idx in range(nq))
 
-    plt.legend(dof_names)
+    plots = [("Joint positions", trajectory.positions)]
+    if len(trajectory.velocities) > 0:
+        plots.append(("Joint velocities", trajectory.velocities))
+    if len(trajectory.accelerations) > 0:
+        plots.append(("Joint accelerations", trajectory.accelerations))
+
+    n = len(plots)
+    if n > 1:
+        fig, axes = plt.subplots(n, 1, sharex=True)
+        for i, (label, data) in enumerate(plots):
+            axes[i].plot(trajectory.times, data)
+            axes[i].set_ylabel(label)
+            axes[i].legend(dof_names)
+            if i == 0:
+                axes[i].set_title(plot_title)
+            if i == n - 1:
+                axes[i].set_xlabel("Time")
+    else:
+        plt.plot(trajectory.times, trajectory.positions)
+        plt.xlabel("Time")
+        plt.ylabel("Joint positions")
+        plt.title(plot_title)
+        plt.legend(dof_names)
 
     return plt.gcf()
