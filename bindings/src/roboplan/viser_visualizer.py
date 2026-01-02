@@ -3,6 +3,8 @@ TEMPORARY FILE: Can be removed when this PR is landed and released.
 https://github.com/stack-of-tasks/pinocchio/pull/2718
 """
 
+from pathlib import Path
+
 try:
     import hppfcl
 except ImportError:
@@ -210,10 +212,12 @@ class ViserVisualizer(BaseVisualizer):
                 opacity=color_override[3],
             )
         elif isinstance(geom, MESH_TYPES):
-            mesh = trimesh.load(geometry_object.meshPath)
-            if color is None:
+            extension = Path(geometry_object.meshPath).suffix.lower()
+            if extension == ".dae" or color_override is None:
+                mesh = trimesh.load_scene(geometry_object.meshPath)
                 frame = self.viewer.scene.add_mesh_trimesh(name, mesh)
             else:
+                mesh = trimesh.load_mesh(geometry_object.meshPath)
                 frame = self.viewer.scene.add_mesh_simple(
                     name,
                     mesh.vertices,
