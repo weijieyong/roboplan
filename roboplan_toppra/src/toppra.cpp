@@ -130,20 +130,31 @@ PathParameterizerTOPPRA::generate(const JointPath& path, const double dt,
           curr_collapsed(j_idx) += 2.0 * M_PI;
         }
       }
+
+      // Calculate distance for step (chordal parameterization)
+      double dist = (curr_collapsed - prev_collapsed).norm();
+      s += std::max(dist, 1e-4);  // Ensure strictly positive step
     }
 
     path_pos_vecs.push_back(curr_collapsed);
-    path_vel_vecs.push_back(Eigen::VectorXd::Zero(curr_collapsed.size()));
     steps.push_back(s);
-    s += 1.0;
   }
+
+  // Use CubicSpline with Natural boundary conditions (zero acceleration at ends).
+  // This allows the velocity at waypoints to be non-zero and smooth.
+  // Note: We use chordal parameterization (s += dist) above to minimize overshoot.
+  std::array<toppra::BoundaryCond, 2> bc_type = {toppra::BoundaryCond("natural"),
+                                                 toppra::BoundaryCond("natural")};
+  Eigen::Map<Eigen::VectorXd> spline_times_vec(steps.data(), steps.size());
+  
   const auto spline =
-      toppra::PiecewisePolyPath::CubicHermiteSpline(path_pos_vecs, path_vel_vecs, steps);
+      toppra::PiecewisePolyPath::CubicSpline(path_pos_vecs, spline_times_vec, bc_type);
   const auto geom_path = std::make_shared<toppra::PiecewisePolyPath>(spline);
 
   // Solve TOPP-RA problem.
   toppra::PathParametrizationAlgorithmPtr algo =
       std::make_shared<toppra::algorithm::TOPPRA>(constraints, geom_path);
+  algo->setN(500);  // increase the number of grid points to prevent sharp acceleration changes
   const auto rc = algo->computePathParametrization();
   if (rc != toppra::ReturnCode::OK) {
     return tl::make_unexpected("TOPPRA failed with return code " +

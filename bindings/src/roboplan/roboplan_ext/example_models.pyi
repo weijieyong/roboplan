@@ -1,8 +1,1 @@
-import pathlib
-
-
-def get_install_prefix() -> pathlib.Path: ...
-
-def get_package_share_dir() -> pathlib.Path: ...
-
-def get_package_models_dir() -> pathlib.Path: ...
+../../../build/cp311-cp311-linux_x86_64/roboplan_ext/example_models.pyi
