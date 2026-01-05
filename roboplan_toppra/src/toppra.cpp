@@ -101,12 +101,9 @@ PathParameterizerTOPPRA::generate(const JointPath& path, const double dt,
   acc_constraint->discretizationType(toppra::DiscretizationType::Interpolation);
   toppra::LinearConstraintPtrs constraints = {vel_constraint, acc_constraint};
 
-  // Create initial cubic spline with path and random times.
-  toppra::Vectors path_pos_vecs, path_vel_vecs;
+  // Create initial cubic spline with path points.
+  toppra::Vectors path_pos_vecs;
   path_pos_vecs.reserve(num_pts);
-  path_vel_vecs.reserve(num_pts);
-  std::vector<double> steps;
-  steps.reserve(num_pts);
   for (size_t idx = 0; idx < path.positions.size(); ++idx) {
     const auto& pos = path.positions.at(idx);
     auto maybe_collapsed_pos = collapseContinuousJointPositions(*scene_, group_name_, pos);
@@ -139,6 +136,19 @@ PathParameterizerTOPPRA::generate(const JointPath& path, const double dt,
   const int kMaxIterations = 10;
   bool found_valid_path = false;
 
+  // Collision checking helper.
+  auto check_collision = [&](const Eigen::VectorXd& q_collapsed)
+      -> tl::expected<bool, std::string> {
+    auto maybe_expanded = expandContinuousJointPositions(*scene_, group_name_, q_collapsed);
+    if (!maybe_expanded) {
+      return tl::make_unexpected("Failed to expand joint positions: " +
+                                 maybe_expanded.error());
+    }
+    const Eigen::VectorXd full_q =
+        scene_->toFullJointPositions(group_name_, maybe_expanded.value());
+    return scene_->hasCollisions(full_q);
+  };
+
   for (int iter = 0; iter < kMaxIterations; ++iter) {
     // 1. Re-calculate steps based on current path points (chordal parameterization)
     std::vector<double> steps;
@@ -151,9 +161,14 @@ PathParameterizerTOPPRA::generate(const JointPath& path, const double dt,
       steps.push_back(s);
     }
 
-    // 2. Build Cubic Spline with Natural BCs
-    std::array<toppra::BoundaryCond, 2> bc_type = {toppra::BoundaryCond("natural"),
-                                                   toppra::BoundaryCond("natural")};
+    // 2. Build Cubic Spline with clamped endpoint derivatives (smooth velocity transition)
+    const Eigen::VectorXd start_deriv =
+        (path_pos_vecs[1] - path_pos_vecs[0]) / (steps[1] - steps[0]);
+    const Eigen::VectorXd end_deriv =
+        (path_pos_vecs[path_pos_vecs.size() - 1] - path_pos_vecs[path_pos_vecs.size() - 2]) /
+        (steps[steps.size() - 1] - steps[steps.size() - 2]);
+    std::array<toppra::BoundaryCond, 2> bc_type = {
+        toppra::BoundaryCond(1, start_deriv), toppra::BoundaryCond(1, end_deriv)};
     Eigen::Map<Eigen::VectorXd> spline_times_vec(steps.data(), steps.size());
     const auto spline =
         toppra::PiecewisePolyPath::CubicSpline(path_pos_vecs, spline_times_vec, bc_type);
@@ -162,36 +177,46 @@ PathParameterizerTOPPRA::generate(const JointPath& path, const double dt,
     // 3. Check for collisions
     bool collision_detected = false;
     size_t segment_to_split = 0;
+    double split_alpha = 0.5;
+
+    // Always verify that all waypoints are collision-free (including inserted ones).
+    for (size_t i = 0; i < path_pos_vecs.size(); ++i) {
+      const auto maybe_collision = check_collision(path_pos_vecs[i]);
+      if (!maybe_collision) {
+        return tl::make_unexpected(maybe_collision.error());
+      }
+      if (maybe_collision.value()) {
+        return tl::make_unexpected("Path waypoint is in collision at index " +
+                                   std::to_string(i) + ".");
+      }
+    }
     
-    // Check resolution: 0.05 units (approx 5cm or 3deg)
-    // We strictly avoid checking the exact waypoints assuming they are collision-free from input.
-    // We check the intervals between them.
-    const double check_resolution = 0.05;
+    // Adaptive check resolution in joint space (approx 0.05 rad / 5 cm).
+    const double max_joint_step = 0.05;
     
     for (size_t i = 0; i < steps.size() - 1; ++i) {
       const double t_start = steps[i];
       const double t_end = steps[i+1];
       
-      // Check intermediate points
-      for (double t = t_start + check_resolution; t < t_end - 1e-4; t += check_resolution) {
-         // Evaluate spline (order 0 = position)
-         Eigen::VectorXd q_collapsed = geom_path->eval_single(t, 0);
-         
-         // Expand back to normal joint space (handle continuous joints)
-         auto maybe_expanded = expandContinuousJointPositions(*scene_, group_name_, q_collapsed);
-         if (!maybe_expanded) {
-            // Should theoretically not happen if collapses were valid
-            continue; 
-         }
-         
-         // Convert to full robot state for collision check
-         Eigen::VectorXd full_q = scene_->toFullJointPositions(group_name_, maybe_expanded.value());
-         
-         if (scene_->hasCollisions(full_q)) {
-             collision_detected = true;
-             segment_to_split = i;
-             break;
-         }
+      const Eigen::VectorXd delta = path_pos_vecs[i + 1] - path_pos_vecs[i];
+      const double max_delta = delta.cwiseAbs().maxCoeff();
+      const int num_checks = std::max(1, static_cast<int>(std::ceil(max_delta / max_joint_step)));
+
+      // Check intermediate points (exclude exact endpoints).
+      for (int k = 1; k <= num_checks; ++k) {
+        const double alpha = static_cast<double>(k) / (num_checks + 1);
+        const double t = t_start + alpha * (t_end - t_start);
+        const Eigen::VectorXd q_collapsed = geom_path->eval_single(t, 0);
+        const auto maybe_collision = check_collision(q_collapsed);
+        if (!maybe_collision) {
+          return tl::make_unexpected(maybe_collision.error());
+        }
+        if (maybe_collision.value()) {
+          collision_detected = true;
+          segment_to_split = i;
+          split_alpha = alpha;
+          break;
+        }
       }
       if (collision_detected) break;
     }
@@ -201,12 +226,22 @@ PathParameterizerTOPPRA::generate(const JointPath& path, const double dt,
       break;
     }
 
-    // 4. Resolve Collision: Insert midpoint
-    // We insert a point halfway between the original waypoints of the colliding segment.
-    // This pulls the spline closer to the straight line chord (which is assumed safe-ish).
+    // 4. Resolve Collision: Insert a point on the chord at the detected collision fraction.
+    // This biases the path toward the straight-line segment which is more likely to be collision-free.
     if (iter < kMaxIterations - 1) {
-        Eigen::VectorXd midpoint = 0.5 * (path_pos_vecs[segment_to_split] + path_pos_vecs[segment_to_split + 1]);
-        path_pos_vecs.insert(path_pos_vecs.begin() + segment_to_split + 1, midpoint);
+        const Eigen::VectorXd chord_point =
+            (1.0 - split_alpha) * path_pos_vecs[segment_to_split] +
+            split_alpha * path_pos_vecs[segment_to_split + 1];
+        const auto maybe_collision = check_collision(chord_point);
+        if (!maybe_collision) {
+          return tl::make_unexpected(maybe_collision.error());
+        }
+        if (maybe_collision.value()) {
+          return tl::make_unexpected(
+              "Refinement failed: chord point is in collision for segment " +
+              std::to_string(segment_to_split) + ".");
+        }
+        path_pos_vecs.insert(path_pos_vecs.begin() + segment_to_split + 1, chord_point);
         // Continue to next iteration to rebuild spline
     }
   }
